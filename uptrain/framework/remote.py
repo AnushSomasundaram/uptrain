@@ -67,6 +67,30 @@ class APIClient:
         response = self.client.get(url, params=params)
         return raise_or_return(response)
 
+    def download_dataset(
+        self, name: str, fpath: str, version: t.Optional[int] = None
+    ) -> None:
+        """
+        Download a dataset from the server.
+
+        Args:
+            name: name of the dataset to download
+            fpath: path to save the dataset to
+            version: version of the dataset to download. If None, the latest version is downloaded.
+        """
+        url = f"{self.base_url}/dataset/{name}/download"
+        params: dict = {}
+        if version is not None:
+            params["version"] = version
+        response = self.client.get(url, params=params)
+        if not response.is_success:
+            logger.error(response.text)
+            response.raise_for_status()
+        else:
+            with open(fpath, "wb") as download_file:
+                for chunk in response.iter_bytes():
+                    download_file.write(chunk)
+
     def add_checkset(self, name: str, checkset: CheckSet, settings: Settings):
         url = f"{self.base_url}/checkset"
         response = self.client.post(
@@ -192,7 +216,7 @@ class APIClient:
         """Get the status of a schedule.
 
         Args:
-            schedule_id: unique identifier for the run.
+            schedule_id: unique identifier for the schedule.
 
         Returns:
             run: information about the schedule along with a unique identifier.
@@ -205,7 +229,7 @@ class APIClient:
         """Remove a schedule.
 
         Args:
-            schedule_id: unique identifier for the run.
+            schedule_id: unique identifier for the schedule.
 
         Returns:
             run: information about the schedule along with a unique identifier.
@@ -219,6 +243,28 @@ class APIClient:
         url = f"{self.base_url}/schedules"
         params: dict = {"num": num, "active_only": active_only}
         response = self.client.get(url, params=params)
+        return raise_or_return(response)
+
+    def rerun_schedule(
+        self, schedule_id: str, start_on: str, end_on: t.Optional[str] = None
+    ):
+        """Rerun a schedule.
+        - New checks added to the checkset are run for all dates
+        - Existing checks are run only on the failed rows.
+
+        Args:
+            schedule_id: unique identifier for the run.
+            start_on: date to start the reruns on
+            end_on: date to end the reruns on
+
+        Returns:
+            run: information about the schedule along with a unique identifier.
+        """
+        url = f"{self.base_url}/schedule/{schedule_id}/rerun"
+        params = {"start_on": start_on}
+        if end_on is not None:
+            params["end_on"] = end_on
+        response = self.client.put(url, params=params)
         return raise_or_return(response)
 
     def evaluate(
